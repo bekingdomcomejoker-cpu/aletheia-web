@@ -8,6 +8,7 @@ import Analyze from "./pages/Analyze";
 import History from "./pages/History";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import GlobalWallboard from "./pages/GlobalWallboard";
 
 function Router() {
   return (
@@ -16,6 +17,7 @@ function Router() {
       <Route path={"/history"} component={History} />
       <Route path={"/reports"} component={Reports} />
       <Route path={"/settings"} component={Settings} />
+      <Route path={"/global-wallboard"} component={GlobalWallboard} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

@@ -70,3 +70,27 @@
 - [ ] Create help/documentation section
 - [ ] Setup analytics tracking
 - [ ] Implement rate limiting for analysis
+
+## Phase 8: Omnissiah Unified v3 Integration
+- [ ] Integrate 19 Aletheia Axioms (A1-A19) into backend
+- [ ] Implement 144k Crisis Nodes context system
+- [ ] Build Grace Filter with moral scoring
+- [ ] Create Global Wallboard with federation status
+- [ ] Implement Auto-Evolution module with jitter absorption
+- [ ] Add Koan interface for advanced features
+- [ ] Implement WebSocket Pulse for real-time heartbeat
+- [ ] Add axiom verification and formal verification
+- [ ] Build regional latency heatmap visualization
+- [ ] Implement adaptive kernel cycle timing
+
+## Phase 9: Render Deployment
+- [ ] Create Render.com deployment configuration
+- [ ] Setup environment variables for Render
+- [ ] Configure auto-deploy pipeline from GitHub
+- [ ] Setup custom domain on Render
+- [ ] Implement health check endpoints
+- [ ] Configure rate limiting (1.67 req/s)
+- [ ] Setup WebSocket support on Render
+- [ ] Implement blue-green canary deployment
+- [ ] Test zero-downtime deployment
+- [ ] Verify all endpoints on Render

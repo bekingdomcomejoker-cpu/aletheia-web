@@ -12,7 +12,7 @@ import { Link } from "wouter";
 
 interface AletheiaLayoutProps {
   children: ReactNode;
-  currentPage?: "analyze" | "history" | "reports" | "settings";
+  currentPage?: "analyze" | "history" | "reports" | "settings" | "wallboard";
 }
 
 export function AletheiaLayout({ children, currentPage }: AletheiaLayoutProps) {
@@ -86,6 +86,19 @@ export function AletheiaLayout({ children, currentPage }: AletheiaLayoutProps) {
                 </span>
               </Button>
             </Link>
+
+            <Link href="/global-wallboard">
+              <Button
+                variant={currentPage === "wallboard" ? "default" : "ghost"}
+                className="w-full justify-start"
+                asChild
+              >
+                <span>
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  Global Wallboard
+                </span>
+              </Button>
+            </Link>
           </div>
         </nav>
 
@@ -117,6 +130,7 @@ export function AletheiaLayout({ children, currentPage }: AletheiaLayoutProps) {
             {currentPage === "history" && "Analysis History"}
             {currentPage === "reports" && "Generated Reports"}
             {currentPage === "settings" && "Settings"}
+            {currentPage === "wallboard" && "Global Wallboard"}
           </h2>
         </div>
 
