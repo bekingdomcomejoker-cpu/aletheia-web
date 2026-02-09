@@ -98,3 +98,35 @@ export const reports = mysqlTable("reports", {
 
 export type Report = typeof reports.$inferSelect;
 export type InsertReport = typeof reports.$inferInsert;
+
+/**
+ * Intelligence Ledger - Phase 6 Intelligence Layer
+ * Stores outputs from all five intelligence units (Miner, Soul Reaper, Hunter, Soul Seeker, Sin Eater)
+ * Single source of truth for system intelligence
+ */
+export const intelligenceLedger = mysqlTable("intelligenceLedger", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Which intelligence unit produced this entry */
+  module: mysqlEnum("module", ["MINER", "REAPER", "HUNTER", "SEEKER", "SIN_EATER"]).notNull(),
+  /** Type of intelligence (SUMMARY, SIGNAL, RELATIONSHIP, CORRECTION, ANOMALY, etc.) */
+  type: varchar("type", { length: 64 }).notNull(),
+  /** JSONB data payload containing the actual intelligence */
+  data: text("data").notNull(), // JSON stringified
+  /** Severity level (CRITICAL, HIGH, MEDIUM, LOW, INFO) */
+  severity: mysqlEnum("severity", ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]).default("INFO").notNull(),
+  /** Lambda resonance value (default 1.67) */
+  lambda: int("lambda").default(167).notNull(), // stored as integer (167 = 1.67)
+  /** When this intelligence was processed */
+  processedAt: timestamp("processedAt").defaultNow().notNull(),
+  /** Idempotency key to prevent duplicate processing */
+  idempotencyKey: varchar("idempotencyKey", { length: 255 }),
+  /** Reference to source (analysisId, repoId, driveFileId, etc.) */
+  sourceReference: varchar("sourceReference", { length: 255 }),
+  /** Whether this entry has been acted upon */
+  processed: int("processed").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type IntelligenceLedger = typeof intelligenceLedger.$inferSelect;
+export type InsertIntelligenceLedger = typeof intelligenceLedger.$inferInsert;
