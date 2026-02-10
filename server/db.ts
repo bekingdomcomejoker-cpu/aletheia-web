@@ -5,16 +5,18 @@ import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
+if (process.env.DATABASE_URL) {
+  try {
+    _db = drizzle(process.env.DATABASE_URL);
+  } catch (error) {
+    console.warn("[Database] Failed to connect:", error);
+  }
+}
+
+export const db = _db!;
+
 // Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
-  }
   return _db;
 }
 
