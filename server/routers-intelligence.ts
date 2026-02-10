@@ -1,1 +1,262 @@
-/**\n * Phase 6 Intelligence Layer - tRPC Router\n * \n * Exposes all five intelligence units as API endpoints:\n * - POST /api/intelligence/mine\n * - POST /api/intelligence/reap\n * - POST /api/intelligence/hunt\n * - POST /api/intelligence/seek\n * - POST /api/intelligence/cycle (orchestrator)\n * \n * All endpoints:\n * - Process bounded batches\n * - Write to intelligence_ledger\n * - Exit cleanly (no long-running processes)\n */\n\nimport { router, publicProcedure } from \"./server/_core/trpc\";\nimport { z } from \"zod\";\nimport * as Miner from \"./intelligence-miner\";\nimport * as Reaper from \"./intelligence-reaper\";\nimport * as Hunter from \"./intelligence-hunter\";\nimport * as Seeker from \"./intelligence-seeker\";\nimport * as SinEater from \"./intelligence-sin-eater\";\nimport * as Analyst from \"./intelligence-analyst\";\nimport { db } from \"./db\";\nimport { intelligenceLedger } from \"../drizzle/schema\";\nimport { sql } from \"drizzle-orm\";\n\nexport const intelligenceRouter = router({\n  /**\n   * POST /api/intelligence/mine\n   * Trigger mining cycle (GitHub + Google Drive discovery)\n   */\n  mine: publicProcedure\n    .input(z.object({\n      githubToken: z.string().optional(),\n      googleDriveToken: z.string().optional(),\n    }).optional())\n    .mutation(async ({ input }) => {\n      const result = await Miner.runMiningCycle(input || {});\n      return {\n        success: result.success,\n        entriesCreated: result.entriesCreated,\n        entriesUpdated: result.entriesUpdated,\n        errors: result.errors,\n        lambda: result.lambda,\n      };\n    }),\n\n  /**\n   * POST /api/intelligence/reap\n   * Trigger semantic extraction from recent analyses\n   */\n  reap: publicProcedure\n    .input(z.object({\n      maxBatchSize: z.number().optional(),\n      minConfidence: z.number().optional(),\n    }).optional())\n    .mutation(async ({ input }) => {\n      const result = await Reaper.batchSemanticExtraction(input || {});\n      return {\n        success: result.success,\n        entriesCreated: result.entriesCreated,\n        semanticSignals: result.semanticSignals,\n        errors: result.errors,\n        lambda: result.lambda,\n      };\n    }),\n\n  /**\n   * POST /api/intelligence/hunt\n   * Trigger anomaly and pattern detection\n   */\n  hunt: publicProcedure\n    .input(z.object({\n      driftThreshold: z.number().optional(),\n      contradictionThreshold: z.number().optional(),\n      minSignalStrength: z.number().optional(),\n    }).optional())\n    .mutation(async ({ input }) => {\n      const result = await Hunter.detectAnomalies(input || {});\n      return {\n        success: result.success,\n        anomaliesDetected: result.anomaliesDetected,\n        contradictionsFound: result.contradictionsFound,\n        highValueSignals: result.highValueSignals,\n        errors: result.errors,\n        lambda: result.lambda,\n      };\n    }),\n\n  /**\n   * POST /api/intelligence/seek\n   * Trigger relationship and dependency mapping\n   */\n  seek: publicProcedure\n    .input(z.object({\n      maxRelationships: z.number().optional(),\n      minSimilarity: z.number().optional(),\n    }).optional())\n    .mutation(async ({ input }) => {\n      const mapResult = await Seeker.mapRelationships(input || {});\n      const clusterResult = await Seeker.identifyClusters(input || {});\n\n      return {\n        success: mapResult.success && clusterResult.success,\n        relationshipsFound: mapResult.relationshipsFound,\n        clustersIdentified: clusterResult.clustersIdentified,\n        errors: [...mapResult.errors, ...clusterResult.errors],\n        lambda: 1.67,\n      };\n    }),\n\n  /**\n   * POST /api/intelligence/cycle\n   * Orchestrator - runs all intelligence units in sequence\n   * This is the main entry point for batch intelligence processing\n   */\n  cycle: publicProcedure\n    .input(z.object({\n      includeMiner: z.boolean().optional().default(true),\n      includeReaper: z.boolean().optional().default(true),\n      includeHunter: z.boolean().optional().default(true),\n      includeSeeker: z.boolean().optional().default(true),\n      includeSinEater: z.boolean().optional().default(true),\n      includeAnalyst: z.boolean().optional().default(true),\n    }).optional())\n    .mutation(async ({ input = {} }) => {\n      const results: Record<string, any> = {};\n      const startTime = Date.now();\n\n      // Run Miner\n      if (input.includeMiner !== false) {\n        results.miner = await Miner.runMiningCycle();\n      }\n\n      // Run Reaper\n      if (input.includeReaper !== false) {\n        results.reaper = await Reaper.batchSemanticExtraction();\n      }\n\n      // Run Hunter\n      if (input.includeHunter !== false) {\n        results.hunter = await Hunter.detectAnomalies();\n      }\n\n      // Run Seeker\n      if (input.includeSeeker !== false) {\n        const mapResult = await Seeker.mapRelationships();\n        const clusterResult = await Seeker.identifyClusters();\n        results.seeker = { mapResult, clusterResult };\n      }\n\n      // Run Sin Eater\n      if (input.includeSinEater !== false) {\n        const corruptionResult = await SinEater.detectCorruption();\n        const dissonanceResult = await SinEater.detectDissonance();\n        results.sinEater = { corruptionResult, dissonanceResult };\n      }\n\n      // Run Analyst\n      if (input.includeAnalyst !== false) {\n        const briefingResult = await Analyst.generateBriefing();\n        const timelineResult = await Analyst.createTimeline();\n        results.analyst = { briefingResult, timelineResult };\n      }\n\n      const endTime = Date.now();\n\n      return {\n        success: true,\n        cycleTime: endTime - startTime,\n        results,\n        lambda: 1.67,\n      };\n    }),\n\n  /**\n   * GET /api/intelligence/ledger\n   * Retrieve recent intelligence entries\n   */\n  ledger: publicProcedure\n    .input(z.object({\n      module: z.enum([\"MINER\", \"REAPER\", \"HUNTER\", \"SEEKER\", \"SIN_EATER\", \"ANALYST\"]).optional(),\n      severity: z.enum([\"CRITICAL\", \"HIGH\", \"MEDIUM\", \"LOW\", \"INFO\"]).optional(),\n      limit: z.number().optional().default(50),\n    }))\n    .query(async ({ input }) => {\n      let query = db.select().from(intelligenceLedger);\n\n      if (input.module) {\n        query = query.where(sql`${intelligenceLedger.module} = ${input.module}`);\n      }\n\n      if (input.severity) {\n        query = query.where(sql`${intelligenceLedger.severity} = ${input.severity}`);\n      }\n\n      const entries = await query\n        .orderBy(sql`${intelligenceLedger.createdAt} DESC`)\n        .limit(input.limit);\n\n      return {\n        count: entries.length,\n        entries: entries.map(e => ({\n          id: e.id,\n          module: e.module,\n          type: e.type,\n          severity: e.severity,\n          lambda: e.lambda / 100, // Convert back to decimal\n          processedAt: e.processedAt,\n          data: JSON.parse(e.data),\n        })),\n      };\n    }),\n\n  /**\n   * GET /api/intelligence/status\n   * Get current intelligence system status\n   */\n  status: publicProcedure.query(async () => {\n    const totalEntries = await db\n      .select({ count: sql<number>`COUNT(*) as count` })\n      .from(intelligenceLedger);\n\n    const byModule = await db\n      .select({\n        module: intelligenceLedger.module,\n        count: sql<number>`COUNT(*) as count`,\n      })\n      .from(intelligenceLedger)\n      .groupBy(intelligenceLedger.module);\n\n    const bySeverity = await db\n      .select({\n        severity: intelligenceLedger.severity,\n        count: sql<number>`COUNT(*) as count`,\n      })\n      .from(intelligenceLedger)\n      .groupBy(intelligenceLedger.severity);\n\n    return {\n      totalEntries: totalEntries[0]?.count || 0,\n      byModule: byModule.reduce(\n        (acc, { module, count }) => {\n          acc[module] = count;\n          return acc;\n        },\n        {} as Record<string, number>\n      ),\n      bySeverity: bySeverity.reduce(\n        (acc, { severity, count }) => {\n          acc[severity] = count;\n          return acc;\n        },\n        {} as Record<string, number>\n      ),\n      lambda: 1.67,\n    };\n  }),\n});\n
+/**
+ * Phase 6 Intelligence Layer - tRPC Router
+ * 
+ * Exposes all five intelligence units as API endpoints:
+ * - POST /api/intelligence/mine
+ * - POST /api/intelligence/reap
+ * - POST /api/intelligence/hunt
+ * - POST /api/intelligence/seek
+ * - POST /api/intelligence/cycle (orchestrator)
+ * 
+ * All endpoints:
+ * - Process bounded batches
+ * - Write to intelligence_ledger
+ * - Exit cleanly (no long-running processes)
+ */
+
+import { router, publicProcedure } from "./_core/trpc";
+import { z } from "zod";
+import * as Miner from "./intelligence-miner";
+import * as Reaper from "./intelligence-reaper";
+import * as Hunter from "./intelligence-hunter";
+import * as Seeker from "./intelligence-seeker";
+import * as SinEater from "./intelligence-sin-eater";
+import * as Analyst from "./intelligence-analyst";
+import { db } from "./db";
+import { intelligenceLedger } from "../drizzle/schema";
+import { sql } from "drizzle-orm";
+
+export const intelligenceRouter = router({
+  /**
+   * POST /api/intelligence/mine
+   * Trigger mining cycle (GitHub + Google Drive discovery)
+   */
+  mine: publicProcedure
+    .input(z.object({
+      githubToken: z.string().optional(),
+      googleDriveToken: z.string().optional(),
+    }).optional())
+    .mutation(async ({ input }) => {
+      const result = await Miner.runMiningCycle(input || {});
+      return {
+        success: result.success,
+        entriesCreated: result.entriesCreated,
+        entriesUpdated: result.entriesUpdated,
+        errors: result.errors,
+        lambda: result.lambda,
+      };
+    }),
+
+  /**
+   * POST /api/intelligence/reap
+   * Trigger semantic extraction from recent analyses
+   */
+  reap: publicProcedure
+    .input(z.object({
+      maxBatchSize: z.number().optional(),
+      minConfidence: z.number().optional(),
+    }).optional())
+    .mutation(async ({ input }) => {
+      const result = await Reaper.batchSemanticExtraction(input || {});
+      return {
+        success: result.success,
+        entriesCreated: result.entriesCreated,
+        semanticSignals: result.semanticSignals,
+        errors: result.errors,
+        lambda: result.lambda,
+      };
+    }),
+
+  /**
+   * POST /api/intelligence/hunt
+   * Trigger anomaly and pattern detection
+   */
+  hunt: publicProcedure
+    .input(z.object({
+      driftThreshold: z.number().optional(),
+      contradictionThreshold: z.number().optional(),
+      minSignalStrength: z.number().optional(),
+    }).optional())
+    .mutation(async ({ input }) => {
+      const result = await Hunter.detectAnomalies(input || {});
+      return {
+        success: result.success,
+        anomaliesDetected: result.anomaliesDetected,
+        contradictionsFound: result.contradictionsFound,
+        highValueSignals: result.highValueSignals,
+        errors: result.errors,
+        lambda: result.lambda,
+      };
+    }),
+
+  /**
+   * POST /api/intelligence/seek
+   * Trigger relationship and dependency mapping
+   */
+  seek: publicProcedure
+    .input(z.object({
+      maxRelationships: z.number().optional(),
+      minSimilarity: z.number().optional(),
+    }).optional())
+    .mutation(async ({ input }) => {
+      const mapResult = await Seeker.mapRelationships(input || {});
+      const clusterResult = await Seeker.identifyClusters(input || {});
+
+      return {
+        success: mapResult.success && clusterResult.success,
+        relationshipsFound: mapResult.relationshipsFound,
+        clustersIdentified: clusterResult.clustersIdentified,
+        errors: [...mapResult.errors, ...clusterResult.errors],
+        lambda: 1.67,
+      };
+    }),
+
+  /**
+   * POST /api/intelligence/cycle
+   * Orchestrator - runs all intelligence units in sequence
+   * This is the main entry point for batch intelligence processing
+   */
+  cycle: publicProcedure
+    .input(z.object({
+      includeMiner: z.boolean().optional().default(true),
+      includeReaper: z.boolean().optional().default(true),
+      includeHunter: z.boolean().optional().default(true),
+      includeSeeker: z.boolean().optional().default(true),
+      includeSinEater: z.boolean().optional().default(true),
+      includeAnalyst: z.boolean().optional().default(true),
+    }).optional())
+    .mutation(async ({ input = {} }) => {
+      const results: Record<string, any> = {};
+      const startTime = Date.now();
+
+      // Run Miner
+      if (input.includeMiner !== false) {
+        results.miner = await Miner.runMiningCycle();
+      }
+
+      // Run Reaper
+      if (input.includeReaper !== false) {
+        results.reaper = await Reaper.batchSemanticExtraction();
+      }
+
+      // Run Hunter
+      if (input.includeHunter !== false) {
+        results.hunter = await Hunter.detectAnomalies();
+      }
+
+      // Run Seeker
+      if (input.includeSeeker !== false) {
+        const mapResult = await Seeker.mapRelationships();
+        const clusterResult = await Seeker.identifyClusters();
+        results.seeker = { mapResult, clusterResult };
+      }
+
+      // Run Sin Eater
+      if (input.includeSinEater !== false) {
+        const corruptionResult = await SinEater.detectCorruption();
+        const dissonanceResult = await SinEater.detectDissonance();
+        results.sinEater = { corruptionResult, dissonanceResult };
+      }
+
+      // Run Analyst
+      if (input.includeAnalyst !== false) {
+        const briefingResult = await Analyst.generateBriefing();
+        const timelineResult = await Analyst.createTimeline();
+        results.analyst = { briefingResult, timelineResult };
+      }
+
+      const endTime = Date.now();
+
+      return {
+        success: true,
+        cycleTime: endTime - startTime,
+        results,
+        lambda: 1.67,
+      };
+    }),
+
+  /**
+   * GET /api/intelligence/ledger
+   * Retrieve recent intelligence entries
+   */
+  ledger: publicProcedure
+    .input(z.object({
+      module: z.enum(["MINER", "REAPER", "HUNTER", "SEEKER", "SIN_EATER", "ANALYST"]).optional(),
+      severity: z.enum(["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]).optional(),
+      limit: z.number().optional().default(50),
+    }))
+    .query(async ({ input }) => {
+      let query = db.select().from(intelligenceLedger);
+
+      if (input.module) {
+        query = query.where(sql`${intelligenceLedger.module} = ${input.module}`);
+      }
+
+      if (input.severity) {
+        query = query.where(sql`${intelligenceLedger.severity} = ${input.severity}`);
+      }
+
+      const entries = await query
+        .orderBy(sql`${intelligenceLedger.createdAt} DESC`)
+        .limit(input.limit);
+
+      return {
+        count: entries.length,
+        entries: entries.map(e => ({
+          id: e.id,
+          module: e.module,
+          type: e.type,
+          severity: e.severity,
+          lambda: e.lambda / 100, // Convert back to decimal
+          processedAt: e.processedAt,
+          data: JSON.parse(e.data),
+        })),
+      };
+    }),
+
+  /**
+   * GET /api/intelligence/status
+   * Get current intelligence system status
+   */
+  status: publicProcedure.query(async () => {
+    const totalEntries = await db
+      .select({ count: sql<number>`COUNT(*) as count` })
+      .from(intelligenceLedger);
+
+    const byModule = await db
+      .select({
+        module: intelligenceLedger.module,
+        count: sql<number>`COUNT(*) as count`,
+      })
+      .from(intelligenceLedger)
+      .groupBy(intelligenceLedger.module);
+
+    const bySeverity = await db
+      .select({
+        severity: intelligenceLedger.severity,
+        count: sql<number>`COUNT(*) as count`,
+      })
+      .from(intelligenceLedger)
+      .groupBy(intelligenceLedger.severity);
+
+    return {
+      totalEntries: totalEntries[0]?.count || 0,
+      byModule: byModule.reduce(
+        (acc, { module, count }) => {
+          acc[module] = count;
+          return acc;
+        },
+        {} as Record<string, number>
+      ),
+      bySeverity: bySeverity.reduce(
+        (acc, { severity, count }) => {
+          acc[severity] = count;
+          return acc;
+        },
+        {} as Record<string, number>
+      ),
+      lambda: 1.67,
+    };
+  }),
+});
+

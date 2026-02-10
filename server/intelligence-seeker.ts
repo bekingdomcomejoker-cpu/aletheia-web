@@ -1,1 +1,235 @@
-/**\n * SOUL SEEKER - Phase 6 Intelligence Unit\n * \n * Purpose: Relationship & dependency mapping\n * - Builds connective tissue across nodes\n * - Maps dependencies between analyses\n * - Identifies related concepts and themes\n * - Creates knowledge graph relationships\n * \n * Triggers:\n * - Batch analysis jobs\n * - Query requests\n * - Snapshot generation\n * \n * Output: Relationship intelligence entries to intelligenceLedger\n */\n\nimport { db } from \"./db\";\nimport { intelligenceLedger, analyses } from \"../drizzle/schema\";\nimport { sql } from \"drizzle-orm\";\n\nexport interface SeekerConfig {\n  maxRelationships?: number;\n  minSimilarity?: number;\n}\n\nexport interface SeekerResult {\n  success: boolean;\n  relationshipsFound: number;\n  clustersIdentified: number;\n  errors: string[];\n  lambda: number;\n}\n\n/**\n * Map relationships between analyses\n */\nexport async function mapRelationships(config: SeekerConfig = {}): Promise<SeekerResult> {\n  const result: SeekerResult = {\n    success: true,\n    relationshipsFound: 0,\n    clustersIdentified: 0,\n    errors: [],\n    lambda: 1.67,\n  };\n\n  const maxRels = config.maxRelationships || 100;\n  const minSim = config.minSimilarity || 0.6;\n\n  try {\n    // Get recent analyses\n    const recentAnalyses = await db\n      .select()\n      .from(analyses)\n      .orderBy(sql`${analyses.createdAt} DESC`)\n      .limit(50);\n\n    // Build relationship map\n    const relationships: Array<{\n      analysisA: string;\n      analysisB: string;\n      similarity: number;\n      commonPatterns: string[];\n    }> = [];\n\n    for (let i = 0; i < recentAnalyses.length; i++) {\n      for (let j = i + 1; j < recentAnalyses.length; j++) {\n        const a = recentAnalyses[i];\n        const b = recentAnalyses[j];\n\n        // Calculate similarity based on shared patterns and scores\n        const similarity = calculateSimilarity(a, b);\n\n        if (similarity >= minSim && relationships.length < maxRels) {\n          const commonPatterns = findCommonPatterns(a, b);\n          relationships.push({\n            analysisA: a.analysisId,\n            analysisB: b.analysisId,\n            similarity,\n            commonPatterns,\n          });\n        }\n      }\n    }\n\n    if (relationships.length > 0) {\n      await db.insert(intelligenceLedger).values({\n        module: \"SEEKER\",\n        type: \"RELATIONSHIP_MAP\",\n        data: JSON.stringify({\n          totalRelationships: relationships.length,\n          relationships: relationships.slice(0, 20), // Top 20 for ledger\n        }),\n        severity: \"INFO\",\n        lambda: 167,\n        sourceReference: \"relationship-map\",\n        idempotencyKey: `seeker-relationships-${Date.now()}`,\n      });\n\n      result.relationshipsFound = relationships.length;\n    }\n\n    result.success = true;\n  } catch (error) {\n    result.success = false;\n    result.errors.push(`Relationship mapping failed: ${error instanceof Error ? error.message : String(error)}`);\n  }\n\n  return result;\n}\n\n/**\n * Identify clusters of related analyses\n */\nexport async function identifyClusters(config: SeekerConfig = {}): Promise<SeekerResult> {\n  const result: SeekerResult = {\n    success: true,\n    relationshipsFound: 0,\n    clustersIdentified: 0,\n    errors: [],\n    lambda: 1.67,\n  };\n\n  try {\n    // Get analyses grouped by status\n    const byStatus = await db\n      .select({\n        status: analyses.status,\n        count: sql<number>`COUNT(*) as count`,\n      })\n      .from(analyses)\n      .groupBy(analyses.status);\n\n    // Get analyses grouped by risk level\n    const byRisk = await db\n      .select({\n        riskLevel: analyses.riskLevel,\n        count: sql<number>`COUNT(*) as count`,\n      })\n      .from(analyses)\n      .groupBy(analyses.riskLevel);\n\n    const clusters = {\n      byStatus,\n      byRisk,\n      totalClusters: (byStatus.length || 0) + (byRisk.length || 0),\n    };\n\n    if (clusters.totalClusters > 0) {\n      await db.insert(intelligenceLedger).values({\n        module: \"SEEKER\",\n        type: \"CLUSTER_ANALYSIS\",\n        data: JSON.stringify(clusters),\n        severity: \"INFO\",\n        lambda: 167,\n        sourceReference: \"cluster-analysis\",\n        idempotencyKey: `seeker-clusters-${Date.now()}`,\n      });\n\n      result.clustersIdentified = clusters.totalClusters;\n    }\n\n    result.success = true;\n  } catch (error) {\n    result.success = false;\n    result.errors.push(`Cluster identification failed: ${error instanceof Error ? error.message : String(error)}`);\n  }\n\n  return result;\n}\n\n/**\n * Calculate similarity between two analyses\n */\nfunction calculateSimilarity(a: any, b: any): number {\n  let similarity = 0;\n  let factors = 0;\n\n  // Same status\n  if (a.status === b.status) {\n    similarity += 0.3;\n  }\n  factors += 0.3;\n\n  // Similar risk level\n  if (a.riskLevel === b.riskLevel) {\n    similarity += 0.3;\n  }\n  factors += 0.3;\n\n  // Similar truth index (within 20 points)\n  if (Math.abs(a.truthIndex - b.truthIndex) < 20) {\n    similarity += 0.2;\n  }\n  factors += 0.2;\n\n  // Similar integrity index\n  if (Math.abs(a.integrityIndex - b.integrityIndex) < 20) {\n    similarity += 0.2;\n  }\n  factors += 0.2;\n\n  return factors > 0 ? similarity / factors : 0;\n}\n\n/**\n * Find common patterns between two analyses\n */\nfunction findCommonPatterns(a: any, b: any): string[] {\n  const patterns: string[] = [];\n\n  try {\n    const patternsA = a.patternsDetected ? JSON.parse(a.patternsDetected) : [];\n    const patternsB = b.patternsDetected ? JSON.parse(b.patternsDetected) : [];\n\n    // Find intersection\n    const common = patternsA.filter((p: string) => patternsB.includes(p));\n    return common.slice(0, 5); // Top 5 common patterns\n  } catch {\n    return patterns;\n  }\n}\n\n/**\n * Get recent seeker entries from ledger\n */\nexport async function getRecentSeekerEntries(limit: number = 50) {\n  return db\n    .select()\n    .from(intelligenceLedger)\n    .where(sql`${intelligenceLedger.module} = 'SEEKER'`)\n    .orderBy(sql`${intelligenceLedger.createdAt} DESC`)\n    .limit(limit);\n}\n
+/**
+ * SOUL SEEKER - Phase 6 Intelligence Unit
+ * 
+ * Purpose: Relationship & dependency mapping
+ * - Builds connective tissue across nodes
+ * - Maps dependencies between analyses
+ * - Identifies related concepts and themes
+ * - Creates knowledge graph relationships
+ * 
+ * Triggers:
+ * - Batch analysis jobs
+ * - Query requests
+ * - Snapshot generation
+ * 
+ * Output: Relationship intelligence entries to intelligenceLedger
+ */
+
+import { db } from "./db";
+import { intelligenceLedger, analyses } from "../drizzle/schema";
+import { sql } from "drizzle-orm";
+
+export interface SeekerConfig {
+  maxRelationships?: number;
+  minSimilarity?: number;
+}
+
+export interface SeekerResult {
+  success: boolean;
+  relationshipsFound: number;
+  clustersIdentified: number;
+  errors: string[];
+  lambda: number;
+}
+
+/**
+ * Map relationships between analyses
+ */
+export async function mapRelationships(config: SeekerConfig = {}): Promise<SeekerResult> {
+  const result: SeekerResult = {
+    success: true,
+    relationshipsFound: 0,
+    clustersIdentified: 0,
+    errors: [],
+    lambda: 1.67,
+  };
+
+  const maxRels = config.maxRelationships || 100;
+  const minSim = config.minSimilarity || 0.6;
+
+  try {
+    // Get recent analyses
+    const recentAnalyses = await db
+      .select()
+      .from(analyses)
+      .orderBy(sql`${analyses.createdAt} DESC`)
+      .limit(50);
+
+    // Build relationship map
+    const relationships: Array<{
+      analysisA: string;
+      analysisB: string;
+      similarity: number;
+      commonPatterns: string[];
+    }> = [];
+
+    for (let i = 0; i < recentAnalyses.length; i++) {
+      for (let j = i + 1; j < recentAnalyses.length; j++) {
+        const a = recentAnalyses[i];
+        const b = recentAnalyses[j];
+
+        // Calculate similarity based on shared patterns and scores
+        const similarity = calculateSimilarity(a, b);
+
+        if (similarity >= minSim && relationships.length < maxRels) {
+          const commonPatterns = findCommonPatterns(a, b);
+          relationships.push({
+            analysisA: a.analysisId,
+            analysisB: b.analysisId,
+            similarity,
+            commonPatterns,
+          });
+        }
+      }
+    }
+
+    if (relationships.length > 0) {
+      await db.insert(intelligenceLedger).values({
+        module: "SEEKER",
+        type: "RELATIONSHIP_MAP",
+        data: JSON.stringify({
+          totalRelationships: relationships.length,
+          relationships: relationships.slice(0, 20), // Top 20 for ledger
+        }),
+        severity: "INFO",
+        lambda: 167,
+        sourceReference: "relationship-map",
+        idempotencyKey: `seeker-relationships-${Date.now()}`,
+      });
+
+      result.relationshipsFound = relationships.length;
+    }
+
+    result.success = true;
+  } catch (error) {
+    result.success = false;
+    result.errors.push(`Relationship mapping failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return result;
+}
+
+/**
+ * Identify clusters of related analyses
+ */
+export async function identifyClusters(config: SeekerConfig = {}): Promise<SeekerResult> {
+  const result: SeekerResult = {
+    success: true,
+    relationshipsFound: 0,
+    clustersIdentified: 0,
+    errors: [],
+    lambda: 1.67,
+  };
+
+  try {
+    // Get analyses grouped by status
+    const byStatus = await db
+      .select({
+        status: analyses.status,
+        count: sql<number>`COUNT(*) as count`,
+      })
+      .from(analyses)
+      .groupBy(analyses.status);
+
+    // Get analyses grouped by risk level
+    const byRisk = await db
+      .select({
+        riskLevel: analyses.riskLevel,
+        count: sql<number>`COUNT(*) as count`,
+      })
+      .from(analyses)
+      .groupBy(analyses.riskLevel);
+
+    const clusters = {
+      byStatus,
+      byRisk,
+      totalClusters: (byStatus.length || 0) + (byRisk.length || 0),
+    };
+
+    if (clusters.totalClusters > 0) {
+      await db.insert(intelligenceLedger).values({
+        module: "SEEKER",
+        type: "CLUSTER_ANALYSIS",
+        data: JSON.stringify(clusters),
+        severity: "INFO",
+        lambda: 167,
+        sourceReference: "cluster-analysis",
+        idempotencyKey: `seeker-clusters-${Date.now()}`,
+      });
+
+      result.clustersIdentified = clusters.totalClusters;
+    }
+
+    result.success = true;
+  } catch (error) {
+    result.success = false;
+    result.errors.push(`Cluster identification failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return result;
+}
+
+/**
+ * Calculate similarity between two analyses
+ */
+function calculateSimilarity(a: any, b: any): number {
+  let similarity = 0;
+  let factors = 0;
+
+  // Same status
+  if (a.status === b.status) {
+    similarity += 0.3;
+  }
+  factors += 0.3;
+
+  // Similar risk level
+  if (a.riskLevel === b.riskLevel) {
+    similarity += 0.3;
+  }
+  factors += 0.3;
+
+  // Similar truth index (within 20 points)
+  if (Math.abs(a.truthIndex - b.truthIndex) < 20) {
+    similarity += 0.2;
+  }
+  factors += 0.2;
+
+  // Similar integrity index
+  if (Math.abs(a.integrityIndex - b.integrityIndex) < 20) {
+    similarity += 0.2;
+  }
+  factors += 0.2;
+
+  return factors > 0 ? similarity / factors : 0;
+}
+
+/**
+ * Find common patterns between two analyses
+ */
+function findCommonPatterns(a: any, b: any): string[] {
+  const patterns: string[] = [];
+
+  try {
+    const patternsA = a.patternsDetected ? JSON.parse(a.patternsDetected) : [];
+    const patternsB = b.patternsDetected ? JSON.parse(b.patternsDetected) : [];
+
+    // Find intersection
+    const common = patternsA.filter((p: string) => patternsB.includes(p));
+    return common.slice(0, 5); // Top 5 common patterns
+  } catch {
+    return patterns;
+  }
+}
+
+/**
+ * Get recent seeker entries from ledger
+ */
+export async function getRecentSeekerEntries(limit: number = 50) {
+  return db
+    .select()
+    .from(intelligenceLedger)
+    .where(sql`${intelligenceLedger.module} = 'SEEKER'`)
+    .orderBy(sql`${intelligenceLedger.createdAt} DESC`)
+    .limit(limit);
+}
+

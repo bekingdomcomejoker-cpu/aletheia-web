@@ -11,6 +11,7 @@ import Settings from "./pages/Settings";
 import GlobalWallboard from "./pages/GlobalWallboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import KoanInterface from "./pages/KoanInterface";
+import IntelligenceOS from "./pages/IntelligenceOS";
 
 function Router() {
   return (
@@ -22,6 +23,7 @@ function Router() {
       <Route path={"/global-wallboard"} component={GlobalWallboard} />
       <Route path={"/admin"} component={AdminDashboard} />
       <Route path={"/koan"} component={KoanInterface} />
+      <Route path={"/intelligence"} component={IntelligenceOS} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

@@ -1,4 +1,255 @@
 /**
  * ANALYST - Phase 6 Intelligence Unit
  * 
- * Purpose: Synthesis & narrative generation\n * - Consumes outputs from Miner, Reaper, Hunter, Seeker\n * - Produces timelines, briefings, strategic understanding\n * - Creates coherent narratives from disparate signals\n * - Generates actionable insights\n * \n * Triggers:\n * - Query requests\n * - Report generation\n * - Briefing requests\n * \n * Output: Synthesis intelligence entries to intelligenceLedger\n */\n\nimport { db } from \"./db\";\nimport { intelligenceLedger } from \"../drizzle/schema\";\nimport { sql } from \"drizzle-orm\";\n\nexport interface AnalystConfig {\n  focusArea?: string;\n  timeWindowDays?: number;\n}\n\nexport interface AnalystResult {\n  success: boolean;\n  briefingsGenerated: number;\n  timelinesCreated: number;\n  insightsProduced: number;\n  errors: string[];\n  lambda: number;\n}\n\n/**\n * Generate a strategic briefing from recent intelligence\n */\nexport async function generateBriefing(config: AnalystConfig = {}): Promise<AnalystResult> {\n  const result: AnalystResult = {\n    success: true,\n    briefingsGenerated: 0,\n    timelinesCreated: 0,\n    insightsProduced: 0,\n    errors: [],\n    lambda: 1.67,\n  };\n\n  try {\n    const timeWindowDays = config.timeWindowDays || 7;\n    const cutoffDate = new Date(Date.now() - timeWindowDays * 24 * 60 * 60 * 1000);\n\n    // Fetch recent intelligence from all modules\n    const recentIntelligence = await db\n      .select()\n      .from(intelligenceLedger)\n      .where(sql`${intelligenceLedger.createdAt} > ${cutoffDate}`)\n      .orderBy(sql`${intelligenceLedger.createdAt} DESC`);\n\n    // Aggregate by module\n    const byModule: Record<string, any[]> = {};\n    for (const entry of recentIntelligence) {\n      if (!byModule[entry.module]) {\n        byModule[entry.module] = [];\n      }\n      byModule[entry.module].push(entry);\n    }\n\n    // Generate briefing narrative\n    const briefing = {\n      generatedAt: new Date().toISOString(),\n      timeWindow: `${timeWindowDays} days`,\n      summary: {\n        totalIntelligenceEntries: recentIntelligence.length,\n        moduleBreakdown: Object.entries(byModule).reduce(\n          (acc, [module, entries]) => {\n            acc[module] = entries.length;\n            return acc;\n          },\n          {} as Record<string, number>\n        ),\n      },\n      keyFindings: synthesizeKeyFindings(byModule),\n      criticalAlerts: extractCriticalAlerts(recentIntelligence),\n      recommendations: generateRecommendations(byModule),\n    };\n\n    // Store briefing in ledger\n    await db.insert(intelligenceLedger).values({\n      module: \"ANALYST\",\n      type: \"STRATEGIC_BRIEFING\",\n      data: JSON.stringify(briefing),\n      severity: \"INFO\",\n      lambda: 167,\n      sourceReference: \"briefing\",\n      idempotencyKey: `analyst-briefing-${Date.now()}`,\n    });\n\n    result.briefingsGenerated = 1;\n    result.insightsProduced = briefing.keyFindings.length;\n  } catch (error) {\n    result.success = false;\n    result.errors.push(`Briefing generation failed: ${error instanceof Error ? error.message : String(error)}`);\n  }\n\n  return result;\n}\n\n/**\n * Create a timeline of intelligence events\n */\nexport async function createTimeline(config: AnalystConfig = {}): Promise<AnalystResult> {\n  const result: AnalystResult = {\n    success: true,\n    briefingsGenerated: 0,\n    timelinesCreated: 0,\n    insightsProduced: 0,\n    errors: [],\n    lambda: 1.67,\n  };\n\n  try {\n    const timeWindowDays = config.timeWindowDays || 30;\n    const cutoffDate = new Date(Date.now() - timeWindowDays * 24 * 60 * 60 * 1000);\n\n    // Get all intelligence entries in chronological order\n    const timeline = await db\n      .select()\n      .from(intelligenceLedger)\n      .where(sql`${intelligenceLedger.createdAt} > ${cutoffDate}`)\n      .orderBy(sql`${intelligenceLedger.createdAt} ASC`);\n\n    // Group by day\n    const byDay: Record<string, any[]> = {};\n    for (const entry of timeline) {\n      const day = entry.createdAt.toISOString().split(\"T\")[0];\n      if (!byDay[day]) {\n        byDay[day] = [];\n      }\n      byDay[day].push({\n        module: entry.module,\n        type: entry.type,\n        severity: entry.severity,\n        time: entry.createdAt.toISOString(),\n      });\n    }\n\n    // Store timeline in ledger\n    await db.insert(intelligenceLedger).values({\n      module: \"ANALYST\",\n      type: \"TIMELINE\",\n      data: JSON.stringify({\n        period: `${timeWindowDays} days`,\n        eventsByDay: byDay,\n        totalEvents: timeline.length,\n      }),\n      severity: \"INFO\",\n      lambda: 167,\n      sourceReference: \"timeline\",\n      idempotencyKey: `analyst-timeline-${Date.now()}`,\n    });\n\n    result.timelinesCreated = 1;\n  } catch (error) {\n    result.success = false;\n    result.errors.push(`Timeline creation failed: ${error instanceof Error ? error.message : String(error)}`);\n  }\n\n  return result;\n}\n\n/**\n * Synthesize key findings from intelligence modules\n */\nfunction synthesizeKeyFindings(byModule: Record<string, any[]>): string[] {\n  const findings: string[] = [];\n\n  // Findings from Miner\n  if (byModule.MINER && byModule.MINER.length > 0) {\n    findings.push(`${byModule.MINER.length} discovery events detected`);\n  }\n\n  // Findings from Reaper\n  if (byModule.REAPER && byModule.REAPER.length > 0) {\n    findings.push(`${byModule.REAPER.length} semantic extractions completed`);\n  }\n\n  // Findings from Hunter\n  if (byModule.HUNTER && byModule.HUNTER.length > 0) {\n    const critical = byModule.HUNTER.filter(e => e.severity === \"CRITICAL\").length;\n    if (critical > 0) {\n      findings.push(`${critical} critical anomalies detected`);\n    }\n  }\n\n  // Findings from Seeker\n  if (byModule.SEEKER && byModule.SEEKER.length > 0) {\n    findings.push(`${byModule.SEEKER.length} relationship mappings created`);\n  }\n\n  return findings;\n}\n\n/**\n * Extract critical alerts from intelligence\n */\nfunction extractCriticalAlerts(entries: any[]): any[] {\n  return entries\n    .filter(e => e.severity === \"CRITICAL\")\n    .map(e => ({\n      module: e.module,\n      type: e.type,\n      time: e.createdAt,\n    }))\n    .slice(0, 10); // Top 10 critical alerts\n}\n\n/**\n * Generate recommendations based on intelligence\n */\nfunction generateRecommendations(byModule: Record<string, any[]>): string[] {\n  const recommendations: string[] = [];\n\n  // Recommendation based on Hunter findings\n  if (byModule.HUNTER && byModule.HUNTER.length > 0) {\n    const hasHighSeverity = byModule.HUNTER.some(e => e.severity === \"HIGH\" || e.severity === \"CRITICAL\");\n    if (hasHighSeverity) {\n      recommendations.push(\"Review detected anomalies immediately\");\n    }\n  }\n\n  // Recommendation based on Sin Eater findings\n  if (byModule.SIN_EATER && byModule.SIN_EATER.length > 0) {\n    recommendations.push(\"Address logged errors and corruption issues\");\n  }\n\n  // General recommendations\n  recommendations.push(\"Continue monitoring intelligence pipeline\");\n  recommendations.push(\"Review relationship mappings for strategic insights\");\n\n  return recommendations;\n}\n\n/**\n * Get recent analyst entries from ledger\n */\nexport async function getRecentAnalystEntries(limit: number = 50) {\n  return db\n    .select()\n    .from(intelligenceLedger)\n    .where(sql`${intelligenceLedger.module} = 'ANALYST'`)\n    .orderBy(sql`${intelligenceLedger.createdAt} DESC`)\n    .limit(limit);\n}\n
+ * Purpose: Synthesis & narrative generation
+ * - Consumes outputs from Miner, Reaper, Hunter, Seeker
+ * - Produces timelines, briefings, strategic understanding
+ * - Creates coherent narratives from disparate signals
+ * - Generates actionable insights
+ * 
+ * Triggers:
+ * - Query requests
+ * - Report generation
+ * - Briefing requests
+ * 
+ * Output: Synthesis intelligence entries to intelligenceLedger
+ */
+
+import { db } from "./db";
+import { intelligenceLedger } from "../drizzle/schema";
+import { sql } from "drizzle-orm";
+
+export interface AnalystConfig {
+  focusArea?: string;
+  timeWindowDays?: number;
+}
+
+export interface AnalystResult {
+  success: boolean;
+  briefingsGenerated: number;
+  timelinesCreated: number;
+  insightsProduced: number;
+  errors: string[];
+  lambda: number;
+}
+
+/**
+ * Generate a strategic briefing from recent intelligence
+ */
+export async function generateBriefing(config: AnalystConfig = {}): Promise<AnalystResult> {
+  const result: AnalystResult = {
+    success: true,
+    briefingsGenerated: 0,
+    timelinesCreated: 0,
+    insightsProduced: 0,
+    errors: [],
+    lambda: 1.67,
+  };
+
+  try {
+    const timeWindowDays = config.timeWindowDays || 7;
+    const cutoffDate = new Date(Date.now() - timeWindowDays * 24 * 60 * 60 * 1000);
+
+    // Fetch recent intelligence from all modules
+    const recentIntelligence = await db
+      .select()
+      .from(intelligenceLedger)
+      .where(sql`${intelligenceLedger.createdAt} > ${cutoffDate}`)
+      .orderBy(sql`${intelligenceLedger.createdAt} DESC`);
+
+    // Aggregate by module
+    const byModule: Record<string, any[]> = {};
+    for (const entry of recentIntelligence) {
+      if (!byModule[entry.module]) {
+        byModule[entry.module] = [];
+      }
+      byModule[entry.module].push(entry);
+    }
+
+    // Generate briefing narrative
+    const briefing = {
+      generatedAt: new Date().toISOString(),
+      timeWindow: `${timeWindowDays} days`,
+      summary: {
+        totalIntelligenceEntries: recentIntelligence.length,
+        moduleBreakdown: Object.entries(byModule).reduce(
+          (acc, [module, entries]) => {
+            acc[module] = entries.length;
+            return acc;
+          },
+          {} as Record<string, number>
+        ),
+      },
+      keyFindings: synthesizeKeyFindings(byModule),
+      criticalAlerts: extractCriticalAlerts(recentIntelligence),
+      recommendations: generateRecommendations(byModule),
+    };
+
+    // Store briefing in ledger
+    await db.insert(intelligenceLedger).values({
+      module: "ANALYST",
+      type: "STRATEGIC_BRIEFING",
+      data: JSON.stringify(briefing),
+      severity: "INFO",
+      lambda: 167,
+      sourceReference: "briefing",
+      idempotencyKey: `analyst-briefing-${Date.now()}`,
+    });
+
+    result.briefingsGenerated = 1;
+    result.insightsProduced = briefing.keyFindings.length;
+  } catch (error) {
+    result.success = false;
+    result.errors.push(`Briefing generation failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return result;
+}
+
+/**
+ * Create a timeline of intelligence events
+ */
+export async function createTimeline(config: AnalystConfig = {}): Promise<AnalystResult> {
+  const result: AnalystResult = {
+    success: true,
+    briefingsGenerated: 0,
+    timelinesCreated: 0,
+    insightsProduced: 0,
+    errors: [],
+    lambda: 1.67,
+  };
+
+  try {
+    const timeWindowDays = config.timeWindowDays || 30;
+    const cutoffDate = new Date(Date.now() - timeWindowDays * 24 * 60 * 60 * 1000);
+
+    // Get all intelligence entries in chronological order
+    const timeline = await db
+      .select()
+      .from(intelligenceLedger)
+      .where(sql`${intelligenceLedger.createdAt} > ${cutoffDate}`)
+      .orderBy(sql`${intelligenceLedger.createdAt} ASC`);
+
+    // Group by day
+    const byDay: Record<string, any[]> = {};
+    for (const entry of timeline) {
+      const day = entry.createdAt.toISOString().split("T")[0];
+      if (!byDay[day]) {
+        byDay[day] = [];
+      }
+      byDay[day].push({
+        module: entry.module,
+        type: entry.type,
+        severity: entry.severity,
+        time: entry.createdAt.toISOString(),
+      });
+    }
+
+    // Store timeline in ledger
+    await db.insert(intelligenceLedger).values({
+      module: "ANALYST",
+      type: "TIMELINE",
+      data: JSON.stringify({
+        period: `${timeWindowDays} days`,
+        eventsByDay: byDay,
+        totalEvents: timeline.length,
+      }),
+      severity: "INFO",
+      lambda: 167,
+      sourceReference: "timeline",
+      idempotencyKey: `analyst-timeline-${Date.now()}`,
+    });
+
+    result.timelinesCreated = 1;
+  } catch (error) {
+    result.success = false;
+    result.errors.push(`Timeline creation failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return result;
+}
+
+/**
+ * Synthesize key findings from intelligence modules
+ */
+function synthesizeKeyFindings(byModule: Record<string, any[]>): string[] {
+  const findings: string[] = [];
+
+  // Findings from Miner
+  if (byModule.MINER && byModule.MINER.length > 0) {
+    findings.push(`${byModule.MINER.length} discovery events detected`);
+  }
+
+  // Findings from Reaper
+  if (byModule.REAPER && byModule.REAPER.length > 0) {
+    findings.push(`${byModule.REAPER.length} semantic extractions completed`);
+  }
+
+  // Findings from Hunter
+  if (byModule.HUNTER && byModule.HUNTER.length > 0) {
+    const critical = byModule.HUNTER.filter(e => e.severity === "CRITICAL").length;
+    if (critical > 0) {
+      findings.push(`${critical} critical anomalies detected`);
+    }
+  }
+
+  // Findings from Seeker
+  if (byModule.SEEKER && byModule.SEEKER.length > 0) {
+    findings.push(`${byModule.SEEKER.length} relationship mappings created`);
+  }
+
+  return findings;
+}
+
+/**
+ * Extract critical alerts from intelligence
+ */
+function extractCriticalAlerts(entries: any[]): any[] {
+  return entries
+    .filter(e => e.severity === "CRITICAL")
+    .map(e => ({
+      module: e.module,
+      type: e.type,
+      time: e.createdAt,
+    }))
+    .slice(0, 10); // Top 10 critical alerts
+}
+
+/**
+ * Generate recommendations based on intelligence
+ */
+function generateRecommendations(byModule: Record<string, any[]>): string[] {
+  const recommendations: string[] = [];
+
+  // Recommendation based on Hunter findings
+  if (byModule.HUNTER && byModule.HUNTER.length > 0) {
+    const hasHighSeverity = byModule.HUNTER.some(e => e.severity === "HIGH" || e.severity === "CRITICAL");
+    if (hasHighSeverity) {
+      recommendations.push("Review detected anomalies immediately");
+    }
+  }
+
+  // Recommendation based on Sin Eater findings
+  if (byModule.SIN_EATER && byModule.SIN_EATER.length > 0) {
+    recommendations.push("Address logged errors and corruption issues");
+  }
+
+  // General recommendations
+  recommendations.push("Continue monitoring intelligence pipeline");
+  recommendations.push("Review relationship mappings for strategic insights");
+
+  return recommendations;
+}
+
+/**
+ * Get recent analyst entries from ledger
+ */
+export async function getRecentAnalystEntries(limit: number = 50) {
+  return db
+    .select()
+    .from(intelligenceLedger)
+    .where(sql`${intelligenceLedger.module} = 'ANALYST'`)
+    .orderBy(sql`${intelligenceLedger.createdAt} DESC`)
+    .limit(limit);
+}
+

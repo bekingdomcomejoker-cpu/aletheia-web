@@ -70,4 +70,140 @@ export async function logError(
     result.success = true;
   } catch (error) {
     result.success = false;
-    result.errors.push(`Error logging failed: ${error instanceof Error ? error.message : String(error)}`);\n  }\n\n  return result;\n}\n\n/**\n * Detect data corruption in analyses\n */\nexport async function detectCorruption(): Promise<SinEaterResult> {\n  const result: SinEaterResult = {\n    success: true,\n    errorsLogged: 0,\n    corruptionDetected: 0,\n    dissonanceFound: 0,\n    errors: [],\n    lambda: 1.67,\n  };\n\n  try {\n    // Check for invalid JSON in stored data\n    const ledgerEntries = await db\n      .select()\n      .from(intelligenceLedger)\n      .limit(100);\n\n    for (const entry of ledgerEntries) {\n      try {\n        JSON.parse(entry.data);\n      } catch {\n        // Corruption detected\n        await logError(\n          \"JSON_CORRUPTION\",\n          {\n            ledgerId: entry.id,\n            module: entry.module,\n            type: entry.type,\n          },\n          \"HIGH\"\n        );\n\n        result.corruptionDetected++;\n      }\n    }\n\n    result.success = true;\n  } catch (error) {\n    result.success = false;\n    result.errors.push(`Corruption detection failed: ${error instanceof Error ? error.message : String(error)}`);\n  }\n\n  return result;\n}\n\n/**\n * Detect dissonance (contradictory intelligence)\n */\nexport async function detectDissonance(): Promise<SinEaterResult> {\n  const result: SinEaterResult = {\n    success: true,\n    errorsLogged: 0,\n    corruptionDetected: 0,\n    dissonanceFound: 0,\n    errors: [],\n    lambda: 1.67,\n  };\n\n  try {\n    // Get recent entries from different modules\n    const minerEntries = await db\n      .select()\n      .from(intelligenceLedger)\n      .where(sql`${intelligenceLedger.module} = 'MINER'`)\n      .orderBy(sql`${intelligenceLedger.createdAt} DESC`)\n      .limit(10);\n\n    const reaperEntries = await db\n      .select()\n      .from(intelligenceLedger)\n      .where(sql`${intelligenceLedger.module} = 'REAPER'`)\n      .orderBy(sql`${intelligenceLedger.createdAt} DESC`)\n      .limit(10);\n\n    // Check for timestamp dissonance (reaper should follow miner)\n    if (minerEntries.length > 0 && reaperEntries.length > 0) {\n      const latestMiner = minerEntries[0].processedAt;\n      const latestReaper = reaperEntries[0].processedAt;\n\n      if (latestReaper < latestMiner) {\n        // Reaper is behind miner - potential dissonance\n        await logError(\n          \"PIPELINE_DISSONANCE\",\n          {\n            latestMinerTime: latestMiner,\n            latestReaperTime: latestReaper,\n            lagMs: latestMiner.getTime() - latestReaper.getTime(),\n          },\n          \"MEDIUM\"\n        );\n\n        result.dissonanceFound++;\n      }\n    }\n\n    result.success = true;\n  } catch (error) {\n    result.success = false;\n    result.errors.push(`Dissonance detection failed: ${error instanceof Error ? error.message : String(error)}`);\n  }\n\n  return result;\n}\n\n/**\n * Get all unreviewed errors from ledger\n */\nexport async function getUnreviewedErrors(limit: number = 50) {\n  return db\n    .select()\n    .from(intelligenceLedger)\n    .where(sql`${intelligenceLedger.module} = 'SIN_EATER'`)\n    .where(sql`${intelligenceLedger.processed} = 0`)\n    .orderBy(sql`${intelligenceLedger.severity} DESC`)\n    .orderBy(sql`${intelligenceLedger.createdAt} DESC`)\n    .limit(limit);\n}\n\n/**\n * Mark an error as reviewed\n */\nexport async function markErrorReviewed(ledgerId: number) {\n  return db\n    .update(intelligenceLedger)\n    .set({ processed: 1 })\n    .where(sql`${intelligenceLedger.id} = ${ledgerId}`);\n}\n
+    result.errors.push(`Error logging failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return result;
+}
+
+/**
+ * Detect data corruption in analyses
+ */
+export async function detectCorruption(): Promise<SinEaterResult> {
+  const result: SinEaterResult = {
+    success: true,
+    errorsLogged: 0,
+    corruptionDetected: 0,
+    dissonanceFound: 0,
+    errors: [],
+    lambda: 1.67,
+  };
+
+  try {
+    // Check for invalid JSON in stored data
+    const ledgerEntries = await db
+      .select()
+      .from(intelligenceLedger)
+      .limit(100);
+
+    for (const entry of ledgerEntries) {
+      try {
+        JSON.parse(entry.data);
+      } catch {
+        // Corruption detected
+        await logError(
+          "JSON_CORRUPTION",
+          {
+            ledgerId: entry.id,
+            module: entry.module,
+            type: entry.type,
+          },
+          "HIGH"
+        );
+
+        result.corruptionDetected++;
+      }
+    }
+
+    result.success = true;
+  } catch (error) {
+    result.success = false;
+    result.errors.push(`Corruption detection failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return result;
+}
+
+/**
+ * Detect dissonance (contradictory intelligence)
+ */
+export async function detectDissonance(): Promise<SinEaterResult> {
+  const result: SinEaterResult = {
+    success: true,
+    errorsLogged: 0,
+    corruptionDetected: 0,
+    dissonanceFound: 0,
+    errors: [],
+    lambda: 1.67,
+  };
+
+  try {
+    // Get recent entries from different modules
+    const minerEntries = await db
+      .select()
+      .from(intelligenceLedger)
+      .where(sql`${intelligenceLedger.module} = 'MINER'`)
+      .orderBy(sql`${intelligenceLedger.createdAt} DESC`)
+      .limit(10);
+
+    const reaperEntries = await db
+      .select()
+      .from(intelligenceLedger)
+      .where(sql`${intelligenceLedger.module} = 'REAPER'`)
+      .orderBy(sql`${intelligenceLedger.createdAt} DESC`)
+      .limit(10);
+
+    // Check for timestamp dissonance (reaper should follow miner)
+    if (minerEntries.length > 0 && reaperEntries.length > 0) {
+      const latestMiner = minerEntries[0].processedAt;
+      const latestReaper = reaperEntries[0].processedAt;
+
+      if (latestReaper < latestMiner) {
+        // Reaper is behind miner - potential dissonance
+        await logError(
+          "PIPELINE_DISSONANCE",
+          {
+            latestMinerTime: latestMiner,
+            latestReaperTime: latestReaper,
+            lagMs: latestMiner.getTime() - latestReaper.getTime(),
+          },
+          "MEDIUM"
+        );
+
+        result.dissonanceFound++;
+      }
+    }
+
+    result.success = true;
+  } catch (error) {
+    result.success = false;
+    result.errors.push(`Dissonance detection failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return result;
+}
+
+/**
+ * Get all unreviewed errors from ledger
+ */
+export async function getUnreviewedErrors(limit: number = 50) {
+  return db
+    .select()
+    .from(intelligenceLedger)
+    .where(sql`${intelligenceLedger.module} = 'SIN_EATER'`)
+    .where(sql`${intelligenceLedger.processed} = 0`)
+    .orderBy(sql`${intelligenceLedger.severity} DESC`)
+    .orderBy(sql`${intelligenceLedger.createdAt} DESC`)
+    .limit(limit);
+}
+
+/**
+ * Mark an error as reviewed
+ */
+export async function markErrorReviewed(ledgerId: number) {
+  return db
+    .update(intelligenceLedger)
+    .set({ processed: 1 })
+    .where(sql`${intelligenceLedger.id} = ${ledgerId}`);
+}
+
