@@ -19,7 +19,10 @@ services:
       - key: OAUTH_SERVER_URL
         sync: false
       - key: VITE_OAUTH_PORTAL_URL
-        sync: false
+        fromService:
+          name: aletheia-unified
+          type: web
+          property: host
       - key: OWNER_OPEN_ID
         sync: false
       - key: OWNER_NAME
