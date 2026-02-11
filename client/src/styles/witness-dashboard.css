@@ -1,0 +1,412 @@
+.witness-dashboard {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #0a0e27 0%, #1a1a3e 100%);
+  color: #00ff41;
+  font-family: 'Courier New', monospace;
+}
+
+.witness-dashboard.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #00ff41;
+}
+
+/* HEADER */
+.dashboard-header {
+  background: rgba(0, 0, 0, 0.5);
+  border-bottom: 2px solid #00ff41;
+  padding: 20px;
+  box-shadow: 0 0 20px rgba(0, 255, 65, 0.1);
+}
+
+.dashboard-header h1 {
+  font-size: 28px;
+  margin-bottom: 10px;
+  text-shadow: 0 0 10px #00ff41;
+}
+
+.status-indicators {
+  display: flex;
+  gap: 20px;
+  font-size: 14px;
+}
+
+.status {
+  padding: 5px 10px;
+  border: 1px solid #00ff41;
+  border-radius: 3px;
+}
+
+.status.connected {
+  background: rgba(0, 255, 65, 0.1);
+}
+
+.status.disconnected {
+  background: rgba(255, 0, 0, 0.1);
+  color: #ff4444;
+  border-color: #ff4444;
+}
+
+.resonance {
+  padding: 5px 10px;
+  border: 1px solid #00ff41;
+  border-radius: 3px;
+  background: rgba(0, 255, 65, 0.05);
+}
+
+/* SPLIT PANE CONTAINER */
+.split-pane-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.left-pane,
+.right-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.left-pane h2,
+.right-pane h2 {
+  font-size: 16px;
+  text-transform: uppercase;
+  color: #00ff41;
+  text-shadow: 0 0 10px #00ff41;
+  margin: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(0, 255, 65, 0.2);
+}
+
+/* RESONANCE METRICS */
+.resonance-metrics {
+  border: 1px solid #00ff41;
+  border-radius: 5px;
+  padding: 15px;
+  background: rgba(0, 255, 65, 0.02);
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.metric-card {
+  background: rgba(0, 255, 65, 0.05) !important;
+  border: 1px solid #00ff41 !important;
+  border-radius: 5px !important;
+  padding: 15px !important;
+  box-shadow: 0 0 15px rgba(0, 255, 65, 0.1) !important;
+}
+
+.metric-card:hover {
+  background: rgba(0, 255, 65, 0.1) !important;
+  box-shadow: 0 0 25px rgba(0, 255, 65, 0.2) !important;
+}
+
+.metric-bar {
+  height: 4px;
+  background: rgba(0, 255, 65, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 10px 0;
+}
+
+.metric-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00ff41, #00cc33);
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px #00ff41;
+}
+
+.metric-description {
+  font-size: 12px;
+  color: #888;
+  margin: 5px 0 0 0;
+}
+
+/* EVENTS SECTION */
+.events-section {
+  border-top: 1px solid rgba(0, 255, 65, 0.2);
+  padding-top: 15px;
+}
+
+.events-section h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  color: #00ff41;
+  margin: 0 0 10px 0;
+}
+
+.events-list {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.event-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid rgba(0, 255, 65, 0.1);
+  font-size: 11px;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.event-item:hover {
+  background: rgba(0, 255, 65, 0.05);
+}
+
+.event-time {
+  color: #888;
+  min-width: 80px;
+}
+
+.event-sensor {
+  color: #00ff41;
+  flex: 1;
+  margin: 0 10px;
+  font-weight: bold;
+}
+
+.event-resonance {
+  color: #00ff41;
+  text-shadow: 0 0 5px #00ff41;
+}
+
+.no-events {
+  text-align: center;
+  color: #666;
+  padding: 20px;
+  font-style: italic;
+  margin: 0;
+}
+
+/* AXIOM LEDGER */
+.axiom-ledger {
+  border: 1px solid #00ff41;
+  border-radius: 5px;
+  padding: 15px;
+  background: rgba(0, 255, 65, 0.02);
+}
+
+.axiom-list {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 20px;
+}
+
+.axiom-entry {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid rgba(0, 255, 65, 0.2);
+  border-radius: 3px;
+  font-size: 11px;
+  animation: slideIn 0.3s ease;
+}
+
+.axiom-entry.status-verified {
+  background: rgba(0, 255, 65, 0.05);
+  border-color: #00ff41;
+}
+
+.axiom-entry.status-pending {
+  background: rgba(255, 200, 0, 0.05);
+  border-color: #ffc800;
+}
+
+.axiom-entry.status-warning {
+  background: rgba(255, 0, 0, 0.05);
+  border-color: #ff4444;
+}
+
+.axiom-number {
+  color: #00ff41;
+  font-weight: bold;
+}
+
+.axiom-status {
+  text-align: center;
+  font-weight: bold;
+}
+
+.axiom-status.verified {
+  color: #00ff41;
+}
+
+.axiom-status.pending {
+  color: #ffc800;
+}
+
+.axiom-status.warning {
+  color: #ff4444;
+}
+
+.axiom-time {
+  text-align: right;
+  color: #888;
+}
+
+.no-axioms {
+  text-align: center;
+  color: #666;
+  padding: 20px;
+  font-style: italic;
+  margin: 0;
+}
+
+/* COVENANT STATUS */
+.covenant-status {
+  border-top: 1px solid rgba(0, 255, 65, 0.2);
+  padding-top: 15px;
+  margin-bottom: 15px;
+}
+
+.covenant-status h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  color: #00ff41;
+  margin: 0 0 10px 0;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.status-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px;
+  border: 1px solid rgba(0, 255, 65, 0.2);
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.status-item .label {
+  color: #888;
+}
+
+.status-item .value {
+  color: #00ff41;
+  font-weight: bold;
+}
+
+/* SPIRITUAL MATHEMATICS */
+.spiritual-math {
+  border-top: 1px solid rgba(0, 255, 65, 0.2);
+  padding-top: 15px;
+}
+
+.spiritual-math h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  color: #00ff41;
+  margin: 0 0 10px 0;
+}
+
+.math-display {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(0, 255, 65, 0.2);
+  border-radius: 3px;
+  padding: 10px;
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+  line-height: 1.6;
+}
+
+.math-display p {
+  margin: 3px 0;
+  color: #00ff41;
+}
+
+/* FOOTER */
+.dashboard-footer {
+  background: rgba(0, 0, 0, 0.5);
+  border-top: 2px solid #00ff41;
+  padding: 15px;
+  text-align: center;
+  font-size: 12px;
+  color: #666;
+}
+
+.dashboard-footer p {
+  margin: 3px 0;
+}
+
+/* SCROLLBAR */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 255, 65, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #00ff41;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00cc33;
+}
+
+/* RESPONSIVE */
+@media (max-width: 1024px) {
+  .split-pane-container {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-header h1 {
+    font-size: 20px;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .axiom-entry {
+    grid-template-columns: 1fr;
+  }
+}
